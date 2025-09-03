@@ -19,36 +19,23 @@
     th { background:#f2f2f2; position: sticky; top: 0; z-index: 4; }
 
     /* Sticky/fixed first columns */
-    /* Roll column */
-    th:nth-child(1), td:nth-child(1) {
-      width: 44px;
-      position: sticky; left: 0; background: #f9f9f9; z-index: 5;
-    }
-    /* Name column */
+    /* Student Name column only */
     th:nth-child(2), td:nth-child(2) {
-      width: 180px; /* ~15 chars space */
+      width: 180px; 
       max-width: 180px;
-      overflow: visible;
-      white-space: nowrap;
-      position: sticky; left: 44px; background: #f9f9f9; z-index: 5;
-      text-align: left; padding-left: 8px;
-    }
-    /* Delete column */
-    th:nth-child(3), td:nth-child(3) {
-      width: 54px;
-      position: sticky; left: 224px; background: #f9f9f9; z-index: 5;
-    }
-    /* Fee Pay column */
-    th:nth-child(4), td:nth-child(4) {
-      width: 84px;
-      position: sticky; left: 278px; background: #f9f9f9; z-index: 5;
+      position: sticky; 
+      left: 0;
+      background: #f9f9f9; 
+      z-index: 5;
+      text-align: left; 
+      padding-left: 8px;
     }
 
     .delete-btn { color: red; cursor: pointer; font-weight: bold; }
     .add-row td { cursor: pointer; background:#e8f5e9; color:#2e7d32; font-weight:700; text-align:center; }
     td.att-present { color: #0b7a1f; font-weight:700; } /* green tick */
     td.att-absent { color: #b30f0f; font-weight:700; }   /* red cross */
-    select.fee-select { width: 100%; }
+    select.fee-select { width: 100%; min-width: 60px; }
     .note { font-size:12px; color:#555; margin-top:6px; }
     .table-wrap { overflow-x:auto; }
   </style>
@@ -78,7 +65,7 @@
     </table>
   </div>
 
-  <div class="note">Click a day cell to toggle: (blank → ✔ → ✖ → blank). Click student name to edit. Click ❌ to remove student.</div>
+  <div class="note">Click a day cell to toggle: (blank → ✔ → ✖ → blank). Sundays are highlighted; attendance not required. Click student name to edit. Click ❌ to remove student.</div>
 
 <script>
 (() => {
@@ -86,12 +73,11 @@
   const headerRow = document.getElementById('headerRow');
   const tbody = document.getElementById('tbody');
 
-  // Build month options: years current-1 .. current+1
   const now = new Date();
   const thisYear = now.getFullYear();
   for (let y = thisYear - 1; y <= thisYear + 1; y++) {
     for (let m = 0; m < 12; m++) {
-      const val = `${y}-${String(m+1).padStart(2,'0')}`; // key
+      const val = `${y}-${String(m+1).padStart(2,'0')}`;
       const text = new Date(y, m, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
       const opt = document.createElement('option');
       opt.value = val;
@@ -99,23 +85,19 @@
       monthSelect.appendChild(opt);
     }
   }
-  // Select current month
   const currentKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   monthSelect.value = currentKey;
 
-  // Helpers
   function parseKey(key) {
     const [y, mm] = key.split('-').map(Number);
-    return { year: y, monthIndex: mm - 1 }; // monthIndex 0..11
+    return { year: y, monthIndex: mm - 1 };
   }
   function daysInMonth(year, monthIndex) {
     return new Date(year, monthIndex + 1, 0).getDate();
   }
-
-  // Return previous existing month key (search backward month-by-month)
   function findPreviousSavedMonth(year, monthIndex) {
     let y = year, m = monthIndex - 1;
-    for (let steps = 0; steps < 36; steps++) { // stop after 3 years back
+    for (let steps = 0; steps < 36; steps++) {
       if (m < 0) { y -= 1; m = 11; }
       const key = `${y}-${String(m+1).padStart(2,'0')}`;
       if (localStorage.getItem('attendance_' + key)) return key;
@@ -124,15 +106,16 @@
     return null;
   }
 
-  // Build header days for selected month
   function buildHeader(year, monthIndex) {
-    // keep first 4 headers then append day headers
     while (headerRow.cells.length > 4) headerRow.deleteCell(4);
     const days = daysInMonth(year, monthIndex);
     for (let d = 1; d <= days; d++) {
       const th = document.createElement('th');
       th.textContent = d;
-      // highlight today only if month-year is current
+      const dayDate = new Date(year, monthIndex, d);
+      if (dayDate.getDay() === 0) { // Sunday
+        th.style.background = '#f0e68c';
+      }
       if (year === now.getFullYear() && monthIndex === now.getMonth() && d === now.getDate()) {
         th.style.background = '#fff8b3';
       }
@@ -140,17 +123,15 @@
     }
   }
 
-  // Load month: if no saved data, copy names from previous saved month (names only)
   function loadMonth() {
     tbody.innerHTML = '';
-    const key = monthSelect.value; // 'YYYY-MM'
+    const key = monthSelect.value;
     const { year, monthIndex } = parseKey(key);
     buildHeader(year, monthIndex);
 
-    const saved = localStorage.getItem('attendance_' + key);
-    let rows = saved ? JSON.parse(saved) : null;
+    let rows = localStorage.getItem('attendance_' + key);
+    rows = rows ? JSON.parse(rows) : null;
     if (!rows) {
-      // copy names only from previous saved month (if exists)
       const prevKey = findPreviousSavedMonth(year, monthIndex);
       if (prevKey) {
         const prevData = JSON.parse(localStorage.getItem('attendance_' + prevKey));
@@ -160,9 +141,8 @@
       }
     }
 
-    // render student rows
     rows.forEach((r, idx) => appendRow(idx + 1, r.name, r.fee, r.attendance, year, monthIndex));
-    // append Add Student row (spans all columns)
+
     const addTr = document.createElement('tr');
     addTr.className = 'add-row';
     const td = document.createElement('td');
@@ -171,133 +151,92 @@
     td.onclick = () => {
       const newIndex = tbody.rows.length + 1;
       appendRow(newIndex, '', '', [], year, monthIndex);
-      saveMonth(); // auto save when adding
+      saveMonth();
     };
     addTr.appendChild(td);
     tbody.appendChild(addTr);
   }
 
-  // Append a student row (roll, name, delete, fee select, N day cells)
   function appendRow(roll, name, fee, attendanceArr, year, monthIndex) {
     const tr = document.createElement('tr');
 
-    // roll
-    const tdRoll = document.createElement('td');
-    tdRoll.textContent = roll;
-    tr.appendChild(tdRoll);
+    const tdRoll = document.createElement('td'); tdRoll.textContent = roll; tr.appendChild(tdRoll);
 
-    // name (editable)
     const tdName = document.createElement('td');
-    tdName.contentEditable = true;
-    tdName.spellcheck = false;
-    tdName.textContent = name || '';
+    tdName.contentEditable = true; tdName.spellcheck = false; tdName.textContent = name || '';
     tdName.onblur = () => saveMonth();
     tr.appendChild(tdName);
 
-    // delete button cell
     const tdDel = document.createElement('td');
-    const delSpan = document.createElement('span');
-    delSpan.className = 'delete-btn';
-    delSpan.textContent = '✖';
-    delSpan.title = 'Delete student';
-    delSpan.onclick = (ev) => {
-      ev.stopPropagation();
-      if (!confirm('Delete this student?')) return;
-      tr.remove();
-      // renumber rolls
-      renumber();
-      saveMonth();
-    };
-    tdDel.appendChild(delSpan);
-    tr.appendChild(tdDel);
+    const delSpan = document.createElement('span'); delSpan.className='delete-btn'; delSpan.textContent='✖';
+    delSpan.title='Delete student';
+    delSpan.onclick = (ev) => { ev.stopPropagation(); if (!confirm('Delete this student?')) return; tr.remove(); renumber(); saveMonth(); };
+    tdDel.appendChild(delSpan); tr.appendChild(tdDel);
 
-    // fee select
     const tdFee = document.createElement('td');
-    const sel = document.createElement('select');
-    sel.className = 'fee-select';
-    ['', 'Yes', 'No'].forEach(v => {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = v;
-      if (v === (fee || '')) o.selected = true;
-      sel.appendChild(o);
-    });
+    const sel = document.createElement('select'); sel.className='fee-select';
+    ['', 'Yes', 'No'].forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; if(v===fee)o.selected=true; sel.appendChild(o); });
     sel.onchange = () => saveMonth();
-    tdFee.appendChild(sel);
-    tr.appendChild(tdFee);
+    tdFee.appendChild(sel); tr.appendChild(tdFee);
 
-    // attendance day cells
     const days = daysInMonth(year, monthIndex);
-    for (let d = 1; d <= days; d++) {
+    for(let d=1; d<=days; d++){
       const td = document.createElement('td');
       const val = attendanceArr && attendanceArr[d-1] ? attendanceArr[d-1] : '';
       td.textContent = val;
       updateAttClass(td);
-      td.onclick = () => {
-        // cycle: "" -> "✔" -> "✖" -> ""
-        if (td.textContent === '') td.textContent = '✔';
-        else if (td.textContent === '✔') td.textContent = '✖';
-        else td.textContent = '';
-        updateAttClass(td);
-        saveMonth();
-      };
+
+      const dayDate = new Date(year, monthIndex, d);
+      if(dayDate.getDay() === 0){ // Sunday
+        td.style.background = '#f0e68c';
+        td.title = 'Sunday - No attendance required';
+      } else {
+        td.onclick = () => { 
+          if(td.textContent==='') td.textContent='✔';
+          else if(td.textContent==='✔') td.textContent='✖';
+          else td.textContent='';
+          updateAttClass(td);
+          saveMonth();
+        };
+      }
+
       tr.appendChild(td);
     }
 
-    // Insert before the Add Student row if it exists; otherwise append.
     const addRow = tbody.querySelector('tr.add-row');
-    if (addRow) tbody.insertBefore(tr, addRow);
+    if(addRow) tbody.insertBefore(tr, addRow);
     else tbody.appendChild(tr);
   }
 
-  function updateAttClass(td) {
-    td.classList.remove('att-present', 'att-absent');
-    if (td.textContent === '✔') td.classList.add('att-present');
-    if (td.textContent === '✖') td.classList.add('att-absent');
-  }
+  function updateAttClass(td){ td.classList.remove('att-present','att-absent'); if(td.textContent==='✔') td.classList.add('att-present'); if(td.textContent==='✖') td.classList.add('att-absent'); }
+  function renumber(){ let r=1; [...tbody.rows].forEach(row=>{ if(row.classList.contains('add-row')) return; const c0=row.cells[0]; if(c0)c0.textContent=r++; }); }
 
-  function renumber() {
-    let r = 1;
-    [...tbody.rows].forEach(row => {
-      if (row.classList.contains('add-row')) return;
-      const c0 = row.cells[0];
-      if (c0) c0.textContent = r++;
-    });
-  }
-
-  // Save current table to localStorage
-  function saveMonth() {
+  function saveMonth(){
     const key = monthSelect.value;
-    const rows = [];
-    [...tbody.rows].forEach(row => {
-      if (row.classList.contains('add-row')) return;
-      const cells = row.cells;
-      const name = cells[1].innerText.trim();
-      const fee = (cells[3].querySelector('select') || {}).value || '';
-      const attendance = [];
-      for (let i = 4; i < cells.length; i++) attendance.push(cells[i].innerText);
-      rows.push({ name, fee, attendance });
+    const rows=[];
+    [...tbody.rows].forEach(row=>{
+      if(row.classList.contains('add-row')) return;
+      const cells=row.cells;
+      const name=cells[1].innerText.trim();
+      const fee=(cells[3].querySelector('select')||{}).value||'';
+      const attendance=[];
+      for(let i=4;i<cells.length;i++) attendance.push(cells[i].innerText);
+      rows.push({name,fee,attendance});
     });
-    localStorage.setItem('attendance_' + key, JSON.stringify(rows));
-    // optional small visual confirmation (commented to avoid alerts interrupting)
-    // alert('Saved ' + key);
+    localStorage.setItem('attendance_'+key,JSON.stringify(rows));
   }
 
-  // Delete month data
-  function deleteMonth() {
+  function deleteMonth(){
     const key = monthSelect.value;
-    if (!confirm('Delete all data for selected month?')) return;
-    localStorage.removeItem('attendance_' + key);
-    loadMonth(); // reload (will copy names from previous if available)
+    if(!confirm('Delete all data for selected month?')) return;
+    localStorage.removeItem('attendance_'+key);
+    loadMonth();
   }
 
-  // Event handlers
   monthSelect.addEventListener('change', loadMonth);
-
-  // Expose save/delete functions to global so buttons can call them
   window.saveMonth = saveMonth;
   window.deleteMonth = deleteMonth;
 
-  // Start
   loadMonth();
 
 })();
